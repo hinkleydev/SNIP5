@@ -8,5 +8,9 @@
         "id" : 2,
         "lang" : "javascript",
         "data" : "console.log('Hello world!')"
+    }, {
+        "id" : 3,
+        "lang" : "javascript",
+        "data" : "console.log(1 + 1)"
     }
 ]
