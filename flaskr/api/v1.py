@@ -1,12 +1,18 @@
 from flask import Blueprint, jsonify, request
-from api.reader import data
+from cryptography.fernet import Fernet
+import os
+
+# All the data is publicly accessible why are we encrypting???
+SECRET_KEY = Fernet.generate_key() # Wouldn't you like to know weatherboy?
+encryptionHandler = Fernet(SECRET_KEY)
+data = []
 
 api = Blueprint('api', __name__)
 
 # Create - Add snippet to the list
 @api.post('/snippets')
 def add():
-    idList = []
+    idList = [0]
     for each in data :
         idList.append(each["id"])
     idList.sort()
@@ -17,14 +23,15 @@ def add():
     if userInput.get("data") == None :
         return jsonify({"error" : "data not specified"})
     # Check the object has the required fields and tell the user if not
+    dataBytes = bytes(source=userInput["data"],encoding="utf-8")
     newObject = {
         "id" : nextId,
         "lang" : userInput["lang"],
-        "data" : userInput["data"]
+        "data" : encryptionHandler.encrypt(dataBytes).decode(encoding="utf-8") # Encrypt for DB
     }
     data.append(newObject)
     # Make new object and add to array
-    return jsonify(newObject), 201
+    return jsonify({"id" : nextId, "lang" : userInput["lang"], "data" : userInput["data"]}), 201
 
 # Root - Returns amount of snippets and languages in use
 @api.get('/snippets')
@@ -41,5 +48,9 @@ def root():
 def byID(id):
     for each in data :
         if id != each["id"] : continue # Pass if not what we're after
-        return jsonify(each)
+        rawData = each["data"]
+        bytesData = bytes(source=rawData, encoding="utf-8")
+        unencryptedData = encryptionHandler.decrypt(bytesData)
+        unencryptedText = unencryptedData.decode(encoding="utf-8")
+        return jsonify({ "id" : each["id"], "lang" : each["lang"], "data" : unencryptedText })
     return jsonify({"error" : "not found"}), 404 # Default if nothing is found
