@@ -1,11 +1,13 @@
-from flask import Flask, request, abort, jsonify
+from flask import Flask, request, abort, jsonify, redirect
 from api.v1 import api
-import bcrypt, jwt, os
+import bcrypt, jwt, os, requests
 from cryptography.fernet import Fernet
 
 users = []
 SALT = bcrypt.gensalt()
 JWT_TOKEN = os.environ["JWT_TOKEN"]
+CLIENT_ID = os.environ["CLIENT_ID"]
+CLIENT_SECRET = os.environ["CLIENT_SECRET"]
 
 @api.before_request
 def loggedIn() :
@@ -50,4 +52,23 @@ def login() :
     if not loggedInUser :
         abort(401, "Incorrect login")
     encoded = jwt.encode(loggedInUser, JWT_TOKEN, algorithm="HS256")
+    return jsonify({"status" : "success", "token" : encoded})
+
+@app.get("/auth")
+def redirect_auth():
+    return redirect("https://github.com/login/oauth/authorize?client_id=" + CLIENT_ID)
+
+@app.get("/callback")
+def authenticate():
+    code = request.args["code"]
+    r = requests.post("https://github.com/login/oauth/access_token", 
+        json={"client_id" : CLIENT_ID, "client_secret" : CLIENT_SECRET, "code" : code},
+        headers={"accept" : "application/json"})
+    access_token = r.json()["access_token"]
+    user = requests.get("https://api.github.com/user",
+        headers={"Accept" : "application/json", "Content-Type" : "application/json", "Authorization" : "Bearer " + access_token})
+    userValues = user.json()
+    userObject = { "username" : userValues["login"], "password" : "GITHUB-USER" }
+    users.append(userObject)
+    encoded = jwt.encode(userObject, JWT_TOKEN, algorithm="HS256")
     return jsonify({"status" : "success", "token" : encoded})
